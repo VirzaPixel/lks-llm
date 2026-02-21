@@ -50,18 +50,24 @@ const Conversations = ({
       setIsloading(true);
       setError(false);
       try {
-         const response = await api.get(`/conversations/${uid}`);
-         const data = response.data;
-         const sorted = data.sort(
-            (
-               a: { createdAt: string | number | Date },
-               b: { createdAt: string | number | Date }
-            ) =>
-               new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-         );
+         // Wrapping the request to simulate a Proxy event for the Non-Proxy Lambda
+         const response = await api.post(`/conversations/${uid}`, {
+            httpMethod: "GET",
+            pathParameters: { uid }
+         });
+         const data = response?.data ?? response;
+
+         // Sorting defensively in case createdAt is missing/invalid
+         const list = Array.isArray(data) ? data : [];
+         const sorted = list.sort((a: any, b: any) => {
+            const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return timeB - timeA;
+         });
 
          setConversations(sorted);
       } catch (error) {
+         console.error("Fetch history failed:", error);
          setError(true);
       } finally {
          setIsloading(false);
@@ -69,7 +75,10 @@ const Conversations = ({
    };
 
    const deleteConversation = async (id: string) => {
-      toast.promise(api.delete(`/conversations/${uid}/${id}`), {
+      toast.promise(api.post(`/conversations/${uid}`, {
+         httpMethod: "DELETE",
+         pathParameters: { uid, id }
+      }), {
          loading: "Deleting conversations...",
          success: (data) => {
             fetchConversations();
@@ -80,13 +89,15 @@ const Conversations = ({
    };
 
    const deleteAllConversations = async () => {
-      toast.promise(api.delete(`/conversations/${uid}`), {
+      toast.promise(api.post(`/conversations/${uid}`, {
+         httpMethod: "DELETE",
+         pathParameters: { uid }
+      }), {
          loading: "Deleting all conversations...",
          success: (data) => {
             fetchConversations();
             return "Clear All conversations successfully!";
          },
-         // success: "All conversations deleted successfully!",
          error: "Failed to delete all conversations!",
       });
    };
@@ -100,7 +111,7 @@ const Conversations = ({
       if (uid) {
          fetchConversations();
       }
-   // eslint-disable-next-line react-hooks/exhaustive-deps
+      // eslint-disable-next-line react-hooks/exhaustive-deps
    }, []);
 
    return (
@@ -145,9 +156,8 @@ const Conversations = ({
             <div className="h-full overflow-y-auto">
                <div className="sticky top-0 h-5 bg-gradient-to-b from-background to-transparent pointer-events-none z-10"></div>
                <div
-                  className={`flex gap-1 ${
-                     conversations.length === 0 ? "h-full max-h-[90%]" : ""
-                  } flex-col`}
+                  className={`flex gap-1 ${conversations.length === 0 ? "h-full max-h-[90%]" : ""
+                     } flex-col`}
                >
                   {isLoading ? (
                      <div className="grid gap-3">
@@ -173,11 +183,10 @@ const Conversations = ({
                      conversations?.map((item) => (
                         <div
                            key={item.id}
-                           className={`group flex gap-2 items-center justify-between p-3 text-[13px] overflow-hidden rounded-sm ${
-                              conversationId === item.id
-                                 ? "bg-accent"
-                                 : "bg-transparent"
-                           } hover:bg-accent hover:opacity-80 hover:rounded-sm hover:cursor-pointer`}
+                           className={`group flex gap-2 items-center justify-between p-3 text-[13px] overflow-hidden rounded-sm ${conversationId === item.id
+                              ? "bg-accent"
+                              : "bg-transparent"
+                              } hover:bg-accent hover:opacity-80 hover:rounded-sm hover:cursor-pointer`}
                            onClick={() =>
                               handleConversationClick(
                                  item.id,
@@ -186,11 +195,10 @@ const Conversations = ({
                            }
                         >
                            <span
-                              className={`inline-block max-w-full truncate capitalize transition-transform duration-300 ${
-                                 conversationId === item.id
-                                    ? "translate-x-0"
-                                    : "translate-x-0"
-                              } group-hover:translate-x-1 text-white/80 font-medium`}
+                              className={`inline-block max-w-full truncate capitalize transition-transform duration-300 ${conversationId === item.id
+                                 ? "translate-x-0"
+                                 : "translate-x-0"
+                                 } group-hover:translate-x-1 text-white/80 font-medium`}
                            >
                               {item.title}
                            </span>

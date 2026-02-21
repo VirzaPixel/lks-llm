@@ -66,7 +66,7 @@ const callAPI = async (
 
          try {
             const refreshResult = await refreshAccessToken(refreshToken);
-            
+
             // Update the session object with the new tokens
             if (session && session.user) {
                session.user.idToken = refreshResult.idToken;
@@ -92,8 +92,26 @@ const callAPI = async (
          throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
-      return data;
+      const raw = await response.json();
+
+      // Deteksi jika respon terbungkus format Proxy (biasanya di Non-Proxy Integration)
+      if (raw && typeof raw === "object" && "statusCode" in raw && "body" in raw) {
+         if (raw.statusCode >= 400) {
+            const errorBody = typeof raw.body === "string" ? JSON.parse(raw.body) : raw.body;
+            throw new Error(`API error ${raw.statusCode}: ${errorBody?.message || errorBody?.error || "Unknown error"}`);
+         }
+
+         if (typeof raw.body === "string") {
+            try {
+               return JSON.parse(raw.body);
+            } catch (e) {
+               return raw.body;
+            }
+         }
+         return raw.body;
+      }
+
+      return raw;
    } catch (error) {
       console.error("API call failed:", error);
       throw error;

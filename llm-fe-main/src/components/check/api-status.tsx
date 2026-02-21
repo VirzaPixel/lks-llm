@@ -39,25 +39,43 @@ const ApiStatus: React.FC<ApiStatusProps> = ({ endpoints }) => {
          try {
             let response;
 
-            switch (endpoint.method) {
-               case "GET":
-                  response = await api.get(endpoint.url);
-                  break;
-            
-               case "POST":
-                  response = await api.post(endpoint.url, endpoint.body);
-                  break;
+            const isConversation = endpoint.url.includes("/conversations/");
 
-               case "PUT":
-                  response = await api.put(endpoint.url, endpoint.body);
-                  break;
-               
-               case "DELETE":
-                  response = await api.delete(endpoint.url);
-                  break;
+            if (isConversation && (endpoint.method !== "POST" || !endpoint.url.endsWith("/conversations"))) {
+               // Event Wrapping for Non-Proxy Lambda support
+               const urlParts = endpoint.url.split("/");
+               // URL format: /conversations/[uid] or /conversations/[uid]/[id]
+               const uidPart = urlParts[2];
+               const idPart = urlParts[3];
 
-               default:
-                  throw new Error("Unsupported method");
+               const targetUrl = `/conversations/${uidPart}`;
+
+               response = await api.post(targetUrl, {
+                  httpMethod: endpoint.method,
+                  pathParameters: { uid: uidPart, id: idPart },
+                  body: endpoint.body ? JSON.stringify(endpoint.body) : undefined
+               });
+            } else {
+               switch (endpoint.method) {
+                  case "GET":
+                     response = await api.get(endpoint.url);
+                     break;
+
+                  case "POST":
+                     response = await api.post(endpoint.url, endpoint.body);
+                     break;
+
+                  case "PUT":
+                     response = await api.put(endpoint.url, endpoint.body);
+                     break;
+
+                  case "DELETE":
+                     response = await api.delete(endpoint.url);
+                     break;
+
+                  default:
+                     throw new Error("Unsupported method");
+               }
             }
 
             setApiStatus((prev) => ({

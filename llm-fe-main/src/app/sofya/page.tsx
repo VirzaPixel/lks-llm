@@ -31,7 +31,7 @@ const ChatLayout = () => {
       name: userData?.name,
    });
    const [conversationId, setConversationId] = useState<string>(uuid());
-   const [conversations, setConversations] = useState([]);
+   const [conversations, setConversations] = useState<any[]>([]);
    const [assesment, setAssesment] = useState<AssessmentCriteria[]>([]);
    const [submitLoading, setSubmitLoading] = useState<boolean>(false);
    const [error, setError] = useState<string | null>(null);
@@ -70,33 +70,60 @@ const ChatLayout = () => {
 
    const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
+      setError(null);
       setSubmitLoading(true);
       handleSubmit();
    };
 
-   const saveConversations = async () => {
-      try {
-         await api.post(`/conversations/${session?.user?.id}`, {
-            id: conversationId,
-            title: messages[1].content.slice(0, 50),
-            conversation: messages.slice(1),
-         })
+   const saveConversations = async (currentMessages: typeof messages) => {
+      if (!currentMessages || currentMessages.length <= 1) return;
+      const titleMsg = currentMessages[1];
+      if (!titleMsg?.content) return;
 
-         getAllConversations()
+      const titleText = titleMsg.content.slice(0, 50);
+
+      try {
+         const userId = session?.user?.id;
+         await api.post(`/conversations/${userId}`, {
+            httpMethod: "POST",
+            pathParameters: { uid: userId },
+            body: JSON.stringify({
+               id: conversationId,
+               title: titleText,
+               conversation: currentMessages.slice(1),
+               userId: userId
+            })
+         })
+         await getAllConversations()
       } catch (error) {
+         console.error("Save failed:", error);
          toast.error('Save conversation error!')
       }
    }
 
    const getAllConversations = async () => {
-      try {
-         const response = await api.get(`/conversations/${session?.user?.id}`)
+      const userId = session?.user?.id;
+      if (!userId) return;
 
-         setConversations(response.data)
+      try {
+         const response = await api.post(`/conversations/${userId}`, {
+            httpMethod: "GET",
+            pathParameters: { uid: userId }
+         })
+         const data = response?.data ?? response;
+         setConversations(Array.isArray(data) ? data : [])
       } catch (error) {
-         toast.error('Save conversation error!')
+         console.error("Get all conversations failed:", error);
       }
    }
+
+   // Auto-save after AI finish responding
+   useEffect(() => {
+      if (!isLoading && messages.length > 1) {
+         saveConversations(messages);
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+   }, [isLoading]);
 
    const handleConversationChange = (data: any) => {
       setConversations(data)
@@ -143,15 +170,6 @@ const ChatLayout = () => {
          }
       }
    }, []);
-
-   useEffect(() => {
-      if (!isLoading) {
-         if (messages.length > 1) {
-            saveConversations()
-         }
-      }
-   // eslint-disable-next-line react-hooks/exhaustive-deps
-   }, [isLoading]);
 
    if (status === "loading") {
       return (
@@ -200,13 +218,13 @@ const ChatLayout = () => {
                      />
                   </DrawerTrigger>
                   <DrawerContent>
-                     <LeftBar 
-                        uid={userData?.id} 
+                     <LeftBar
+                        uid={userData?.id}
                         conversationId={conversationId}
-                        conversations={conversations} 
+                        conversations={conversations}
                         settingsData={settingsData}
                         setConversationId={setConversationId}
-                        setConversations={handleConversationChange} 
+                        setConversations={handleConversationChange}
                         setMessages={setMessages}
                         setSettingsData={handleSettings}
                      />
@@ -243,14 +261,14 @@ const ChatLayout = () => {
          <div className="flex flex-1 overflow-hidden ">
             <div className="w-full max-w-[75rem] mx-auto h-full flex ">
                <div className="hidden md:flex md:flex-col w-full max-w-[280px] h-full ">
-                  <LeftBar 
-                     uid={userData?.id} 
+                  <LeftBar
+                     uid={userData?.id}
                      conversationId={conversationId}
-                     conversations={conversations} 
+                     conversations={conversations}
                      settingsData={settingsData}
                      setConversationId={setConversationId}
-                     setConversations={handleConversationChange} 
-                     setMessages={setMessages} 
+                     setConversations={handleConversationChange}
+                     setMessages={setMessages}
                      setSettingsData={handleSettings}
                   />
                </div>
